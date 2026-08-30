@@ -135,14 +135,15 @@ All sources are genuine, open (or freely registerable) primary data — no synth
 
 ## Tech Stack
 
-**Frontend (live now)** — a Vite + React + TypeScript single-page app with Tailwind CSS, shadcn/ui components, Leaflet map, and Recharts data viz. Responsive and mobile-optimised. Currently serves as the district & ward risk dashboard prototype.
+**Backend (built)** — a Python **FastAPI** service computing the EHI-N\* index, WBGT/UTCI/Heat-Index references, the transparent risk composite, and audience-specific advisories. Serves the exact SIH26083 API contract (§5) with pydantic validation and CORS. Uses **MockAlertSender** during the demo (real Twilio/FCM/email are a config swap).
 
-**Planned**
+- **Data & indices:** `xarray`, `netCDF4`, `pandas`, `numpy`, `scipy`, `cdsapi`, `requests`, `geopandas`, `rasterio` (ingest + back-test)
+- **Model/index:** pure `numpy`/`scipy` — EHI-N\* (metabolic rate + solar + Indian morphology + thermoregulatory limits), WBGT, UTCI, Heat Index
+- **API:** FastAPI, uvicorn, pydantic
+- **Alerts:** Twilio (SMS/WhatsApp), FCM push, SMTP email — or `MockAlertSender` in dev
+- **Deploy:** Vercel (frontend) + Render (backend)
 
-- **Data & indices:** `xarray`, `netCDF4`, `pandas`, `numpy`, `scipy`, `cdsapi`, `requests`, `geopandas`, `rasterio`
-- **Backend / API:** FastAPI — `/risk?district=...&met=6&sun=1`
-- **Alerts:** FCM / Twilio for push + SMS
-- **GIS:** district polygons, choropleth, urban heat-island overlay
+**Frontend (built)** — a Vite + React + TypeScript single-page app with Tailwind CSS, shadcn/ui components, Leaflet map, and Recharts data viz. Responsive and mobile-optimised. Currently runs the district & ward risk dashboard on `USE_MOCK = true`; flip it to `false` and point `API_BASE` at the deployed backend.
 
 ---
 
@@ -150,9 +151,22 @@ All sources are genuine, open (or freely registerable) primary data — no synth
 
 ```
 UshnaKavach/
+├── backend/             # FastAPI + EHI-N* index engine + ingest + alerts
+│   ├── app/
+│   │   ├── api.py       # 7 API endpoints + CORS
+│   │   ├── index/       # EHI-N*, WBGT, UTCI, Heat Index
+│   │   ├── ingest/      # IMD / GFS / ERA5 providers + mock fallback
+│   │   ├── risk.py      # transparent hazard x exposure x vulnerability score
+│   │   ├── advisories.py# audience guidance + template fallback
+│   │   ├── alerts.py    # MockAlertSender (real channels later)
+│   │   └── service.py   # composes everything into API shapes
+│   ├── tests/           # pytest + ruff (19 tests passing)
+│   ├── requirements.txt
+│   └── run.py
 ├── Frontend/            # Vite + React + TS + Tailwind SPA (district/ward risk dashboard)
 │   ├── index.html
 │   ├── vite.config.ts
+│   ├── vercel.json
 │   ├── package.json
 │   ├── src/
 │   │   ├── main.tsx
@@ -164,6 +178,8 @@ UshnaKavach/
 │   │   └── styles/              # fonts, globals, theme, tailwind
 │   └── ...
 ├── README.md
+├── BACKLOG.md           # deferred work / to-add list
+├── render.yaml          # Render backend blueprint
 └── .gitignore
 ```
 
@@ -191,9 +207,30 @@ pnpm build
 
 The static output lands in `Frontend/dist/` and can be served on any static host (Vercel, Netlify, etc.). CI deploys the `Frontend` directory as a static site.
 
-### Backend / API (in development)
+### Backend / API
 
-The FastAPI backend, ERA5/IMD ingest, EHI-N\* computation, and alert dispatch are the next layers — they are not yet wired to this frontend. The current UI runs on sample/mock data while the live data pipeline is built.
+The backend serves the full SIH26083 API contract (base URL `http://localhost:8000/api`). It runs on mock data by default so it works with no keys:
+
+```bash
+cd backend
+python -m pip install -r requirements.txt
+python run.py                 # or: python -m uvicorn app.api:app --reload --port 8000
+```
+
+The app is served at `http://localhost:8000` with interactive docs at `/docs`. To connect the frontend:
+
+1. Set `VITE_API_BASE` in `Frontend/.env` to the backend URL.
+2. Set `USE_MOCK = false` in `Frontend/src/app/lib/api.ts`.
+
+**Live data:** add an IMD API key and set `USHNAKAVACH_USE_MOCK=false` in `.env` (see `backend/.env.example`). The ingest falls back to labelled mock data if the key is absent or the API is throttled — it never fabricates unlabelled data.
+
+### Deployment
+
+**Frontend → Vercel** — import `Kihoro-code/UshnaKavach`, framework **Vite**, root directory `Frontend`. The included `vercel.json` sets the build/output dirs.
+
+**Backend → Render** — the included `render.yaml` is a Render Blueprint (free plan). Set the env vars from `backend/.env.example` in the Render dashboard, then set the frontend's `VITE_API_BASE` to the Render URL.
+
+**Fast local mirror** — `USE_MOCK = true` and `http://localhost:8000` let the whole app run offline for a quick demo; the deployed version points at Render.
 
 ---
 

@@ -17,7 +17,9 @@ import type {
   Audience,
 } from "./types";
 
-export const API_BASE = "http://localhost:8000/api";
+// Base URL for the SIH26083 backend. Defaults to localhost for local dev; set
+// VITE_API_BASE in .env to point at the deployed backend (e.g. Render).
+export const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:8000/api";
 export const USE_MOCK = true;
 
 async function http<T>(path: string, options?: RequestInit): Promise<T> {
@@ -86,4 +88,3 @@ export async function previewAlert(regionId: string, audience: Audience): Promis
     body: JSON.stringify({ region_id: regionId, audience }),
   });
 }
-
